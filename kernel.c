@@ -72,6 +72,8 @@ void puts(char *s)
 
 #define O_CREAT 4
 
+
+
 /* Stack struct of user thread, see "Exception entry and return" */
 struct user_thread_stack {
 	unsigned int r4;
@@ -104,6 +106,15 @@ struct task_control_block {
     struct task_control_block **prev;
     struct task_control_block  *next;
 };
+
+
+/*******************************************************************************/
+size_t task_count = 0;
+struct task_control_block tasks[TASK_LIMIT];
+/*******************************************************************************/
+
+
+
 
 /* 
  * pathserver assumes that all files are FIFOs that were registered
@@ -321,15 +332,19 @@ void serial_readwrite_task()
 	char ch;
 	int curr_char;
 	int done;
+	char test[5]={'z','z','z','z','\0'};
+	int t=0;
 
 	fdout = mq_open("/tmp/mqueue/out", 0);
 	fdin = open("/dev/tty0/in", 0);
 
 	/* Prepare the response message to be queued. */
-	memcpy(str, "Got:", 4);
+	//memcpy(str, "Got:", 4);
+
+
 
 	while (1) {
-		curr_char = 4;
+		curr_char = 0;
 		done = 0;
 		do {
 			/* Receive a byte from the RS232 port (this call will
@@ -355,9 +370,221 @@ void serial_readwrite_task()
 		 * response to be sent to the RS232 port.
 		 */
 		write(fdout, str, curr_char+1+1);
+		write(fdout, test, 5);
 	}
 }
 
+char *pro_sta(int in)
+{
+	switch(in)
+		{
+		case 0:return "TASK_READY	";
+		case 1:return "TASK_WAIT_READ	";
+		case 2:return "TASK_WAIT_WRITE	";
+		case 3:return "TASK_WAIT_WRITE	";
+		case 4:return "TASK_WAIT_TIME	";
+		default:return "No Status	";
+		
+		}
+}
+
+
+void shell()
+{
+	int fdout, fdin;
+	char str[100];
+	char ins[100];
+	
+	char ch;
+	int curr_char;
+	int curr_ins=0;
+	int done;
+	int i;
+	int state=0;
+
+	fdout = mq_open("/tmp/mqueue/out", 0);
+	fdin = open("/dev/tty0/in", 0);
+	//memcpy(str, "JoyShell>>", 11);
+
+	while (1) 
+	{
+		switch(state)
+		{
+				case 0://Wait command that be inserted 
+					{
+					//char Shell[15]="JoyShell>>";
+					write(fdout, "JoyShell>>", 12);
+					curr_ins=0;
+					while(state==0)
+						{
+						curr_char = 0;
+						read(fdin, &ch, 1);
+						str[curr_char++]=ch;
+						if((ch==127)&&(curr_ins>0))
+							{
+							str[curr_char-1]='\b';
+							str[curr_char++]=' ';
+							str[curr_char++]='\b';
+							str[curr_char++]='\0';
+							curr_ins--;
+							}
+						else if((ch==127)&&(curr_ins<=0))
+							{
+							str[curr_char-1]=' ';
+							str[curr_char++]='\b';
+							str[curr_char++]='\0';
+							}
+						else if(ch=='\r')
+							{
+							ins[curr_ins++]=ch;
+							str[curr_char++]='\n';
+							str[curr_char++]='\0';
+							ins[curr_ins++]='\n';
+							ins[curr_ins++]='\0';
+							state=1;
+							}
+						else
+							{
+							ins[curr_ins++]=ch;
+							str[curr_char++]='\0';
+							}
+						write(fdout, str, curr_char+1+1);
+						}
+					}break;
+				case 1://Check command 
+					{
+					if((ins[0]=='e')&&(ins[1]=='c')&&(ins[2]=='h')&&(ins[3]=='o')&&(ins[4]==' '))
+						{
+						state=2;
+						}
+					else if((ins[0]=='h')&&(ins[1]=='e')&&(ins[2]=='l')&&(ins[3]=='l')&&(ins[4]=='o'))
+						{
+						state=3;
+						}
+					else if((ins[0]=='h')&&(ins[1]=='e')&&(ins[2]=='l')&&(ins[3]=='p'))
+						{
+						state=4;
+						}
+					else if((ins[0]=='p')&&(ins[1]=='s'))
+						{
+						state=5;
+						}
+					else// no server
+						{
+						write(fdout, "No server\r\n", 13);
+						state=0;
+						}
+					}break;
+				case 2://echo command
+					{
+						curr_char=0;
+						for(i=5;i<curr_ins;i++)
+							{
+							str[curr_char++]=ins[i];
+							}
+						write(fdout, str, curr_char+1);
+						state=0;
+					}break;
+				case 3://hello command
+					{
+						write(fdout, "You are a cool guy!!\r\n", 25);
+						state=0;
+					}break;
+				case 4://help command
+					{
+						write(fdout, "echo-Show words that you enter a moment ago\r\n", 50);
+						write(fdout, "hello-Show words that you want to listen \r\n", 50);
+						write(fdout, "ps-Show process that is runing \r\n", 50);
+						state=0;
+					}break;
+				case 5://ps command
+					{
+						curr_char=0;
+						char space[10]="   ";
+						write(fdout, "Process's number is  ", 50);
+						ch=itoa(task_count);
+						str[curr_char++]=ch;
+						str[curr_char++]='\r';
+						str[curr_char++]='\n';
+						str[curr_char++]='\0';
+						write(fdout, str, 10);
+						write(fdout, "Pid    Status          Priority\r\n", 50);
+						for(i=0;i<task_count;i++)
+							{
+									curr_char=0;
+									ch=itoa(tasks[i].pid);
+									str[curr_char++]=ch;
+									str[curr_char++]='\0';
+									write(fdout, str, 10);
+									write(fdout, space, 10);
+									write(fdout, space, 10);
+									
+									curr_char=0;
+									write(fdout, pro_sta(tasks[i].status), 50);
+									
+									int k=0;
+									int pri[10];
+									int ori;
+										for(k=0;k<=9;k++)
+											pri[k]=0;
+									ori=tasks[i].priority;
+									curr_char=0;
+									int j=0;
+										do
+										{
+											pri[j]=(ori%10);
+											ori=ori/10;
+											j++;
+										}while(ori>=10);
+
+									ch=itoa(ori);
+									str[curr_char++]=ch;
+									for(j=j-1;j>=0;j--)
+										{
+										ch=itoa(pri[j]);
+										str[curr_char++]=ch;
+										}
+									str[curr_char++]='\0';
+									write(fdout, str, 10);
+									write(fdout, space, 10);
+									
+									
+									curr_char=0;
+									str[curr_char++]='\r';
+									str[curr_char++]='\n';
+									str[curr_char++]='\0';
+									write(fdout, str, 10);
+
+							}
+						state=0;
+					}break;
+						
+		}		
+
+	}
+}
+
+
+
+int itoa(int in)
+{
+	int out;
+	switch(in)
+	{
+		case 0:out=48; break;
+		case 1:out=49; break;
+		case 2:out=50; break;
+		case 3:out=51; break;
+		case 4:out=52; break;
+		case 5:out=53; break;
+		case 6:out=54; break;
+		case 7:out=55; break;
+		case 8:out=56; break;
+		case 9:out=57; break;
+		default:out=1; break;
+	}
+	return out;
+}
 void first()
 {
 	setpriority(0, 0);
@@ -366,9 +593,10 @@ void first()
 	if (!fork()) setpriority(0, 0), serialout(USART2, USART2_IRQn);
 	if (!fork()) setpriority(0, 0), serialin(USART2, USART2_IRQn);
 	if (!fork()) rs232_xmit_msg_task();
-	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task1();
-	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task2();
-	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), serial_readwrite_task();
+	//if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task1();
+	//if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), queue_str_task2();
+	//if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), serial_readwrite_task();
+	if (!fork()) setpriority(0, PRIORITY_DEFAULT - 10), shell();
 
 	setpriority(0, PRIORITY_LIMIT);
 
@@ -665,15 +893,15 @@ _mknod(struct pipe_ringbuffer *pipe, int dev)
 	}
 	return 0;
 }
+//global variable
 
 int main()
 {
 	unsigned int stacks[TASK_LIMIT][STACK_SIZE];
-	struct task_control_block tasks[TASK_LIMIT];
+
 	struct pipe_ringbuffer pipes[PIPE_LIMIT];
 	struct task_control_block *ready_list[PRIORITY_LIMIT + 1];  /* [0 ... 39] */
 	struct task_control_block *wait_list = NULL;
-	size_t task_count = 0;
 	size_t current_task = 0;
 	size_t i;
 	struct task_control_block *task;
@@ -837,3 +1065,4 @@ int main()
 
 	return 0;
 }
+
