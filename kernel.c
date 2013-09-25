@@ -404,7 +404,6 @@ void shell()
 
 	fdout = mq_open("/tmp/mqueue/out", 0);
 	fdin = open("/dev/tty0/in", 0);
-	//memcpy(str, "JoyShell>>", 11);
 
 	while (1) 
 	{
@@ -412,7 +411,6 @@ void shell()
 		{
 				case 0://Wait command that be inserted 
 					{
-					//char Shell[15]="JoyShell>>";
 					write(fdout, "JoyShell>>", 12);
 					curr_ins=0;
 					while(state==0)
@@ -420,7 +418,7 @@ void shell()
 						curr_char = 0;
 						read(fdin, &ch, 1);
 						str[curr_char++]=ch;
-						if((ch==127)&&(curr_ins>0))
+						if((ch==127)&&(curr_ins>0))//detect backspace
 							{
 							str[curr_char-1]='\b';
 							str[curr_char++]=' ';
@@ -428,26 +426,27 @@ void shell()
 							str[curr_char++]='\0';
 							curr_ins--;
 							}
-						else if((ch==127)&&(curr_ins<=0))
+						else if((ch==127)&&(curr_ins<=0))//It is limit(at first) so can not to be backspace 
 							{
 							str[curr_char-1]=' ';
 							str[curr_char++]='\b';
 							str[curr_char++]='\0';
 							}
-						else if(ch=='\r')
+						else if(ch=='\r')//detect enter
 							{
 							ins[curr_ins++]=ch;
-							str[curr_char++]='\n';
-							str[curr_char++]='\0';
 							ins[curr_ins++]='\n';
 							ins[curr_ins++]='\0';
+							str[curr_char++]='\n';
+							str[curr_char++]='\0';
 							state=1;
 							}
-						else
+						else//detect universal word
 							{
 							ins[curr_ins++]=ch;
 							str[curr_char++]='\0';
 							}
+						
 						write(fdout, str, curr_char+1+1);
 						}
 					}break;
@@ -457,15 +456,15 @@ void shell()
 						{
 						state=2;
 						}
-					else if((ins[0]=='h')&&(ins[1]=='e')&&(ins[2]=='l')&&(ins[3]=='l')&&(ins[4]=='o'))
+					else if((ins[0]=='h')&&(ins[1]=='e')&&(ins[2]=='l')&&(ins[3]=='l')&&(ins[4]=='o')&&(curr_ins==8))
 						{
 						state=3;
 						}
-					else if((ins[0]=='h')&&(ins[1]=='e')&&(ins[2]=='l')&&(ins[3]=='p'))
+					else if((ins[0]=='h')&&(ins[1]=='e')&&(ins[2]=='l')&&(ins[3]=='p')&&(curr_ins==7))
 						{
 						state=4;
 						}
-					else if((ins[0]=='p')&&(ins[1]=='s'))
+					else if((ins[0]=='p')&&(ins[1]=='s')&&(curr_ins==5))
 						{
 						state=5;
 						}
@@ -1038,7 +1037,7 @@ int main()
 						tasks[i].status = TASK_READY;
 			}
 		}
-
+ 
 		/* Put waken tasks in ready list */
 		for (task = wait_list; task != NULL;) {
 			struct task_control_block *next = task->next;
