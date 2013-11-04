@@ -107,14 +107,16 @@ struct task_control_block {
     struct task_control_block  *next;
 };
 
+#define QMAXSIZE 100
 /* circle queue for UART Rx buffer */
 typedef struct
 {
-	char buff[100]; //data buffer
-	int wprt; 	//write point
-	int rprt;	//read point
+	char buff[QMAXSIZE]; //data buffer
+	int wptr; 	//write point
+	int rptr;	//read point
 }UART_BUFFER;
 
+UART_BUFFER RxQ;
 
 /*******************************************************************************/
 size_t task_count = 0;
@@ -134,6 +136,39 @@ struct task_control_block tasks[TASK_LIMIT];
  * The server registers itself at /sys/pathserver
 */
 #define PATH_SERVER_NAME "/sys/pathserver"
+
+
+/* IRQ handler to initial USART2 RX. */
+void UART2_Init()
+{
+	RxQ.wptr = 0;
+	RxQ.rptr = 0;
+	int i;
+	for ( i=0; i < QMAXSIZE ; i++)
+		RxQ.buff[i] = '\0';
+}
+
+//ref openbox
+/* IRQ handler to handle USART2 receive interruptss (RX). */
+void USART2_IRQHandler()
+{
+	
+	char c;
+
+ 	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+	if (USART_GetFlagStatus(USART2, USART_FLAG_RXNE) == SET) 
+	{
+		if(RxQ.wptr + 1 != RxQ.rptr)
+			{
+			c = USART_ReceiveData(USART2);
+			RxQ.buff[RxQ.wptr++] = c;
+			}
+		if(RxQ.wptr == QMAXSIZE)
+			{
+			RxQ.wptr = 0;
+			}
+	}
+}
 void pathserver()
 {
 	char paths[PIPE_LIMIT - TASK_LIMIT - 3][PATH_MAX];
@@ -922,6 +957,7 @@ int main()
 
 	enable_rs232_interrupts();
 	enable_rs232();
+	UART2_Init();
 
 	tasks[task_count].stack = (void*)init_task(stacks[task_count], &first);
 	tasks[task_count].pid = 0;
