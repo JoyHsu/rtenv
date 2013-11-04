@@ -107,6 +107,14 @@ struct task_control_block {
     struct task_control_block  *next;
 };
 
+/* circle queue for UART Rx buffer */
+typedef struct
+{
+	char buff[100]; //data buffer
+	int wprt; 	//write point
+	int rprt;	//read point
+}UART_BUFFER;
+
 
 /*******************************************************************************/
 size_t task_count = 0;
