@@ -426,7 +426,7 @@ void shell()
 							str[curr_char++]='\0';
 							curr_ins--;
 							}
-						else if((ch==127)&&(curr_ins<=0))//It is limit(at first) so can not to be backspace 
+						else if((ch==127)&&(curr_ins<=0))//It is limit(at first) ,so can not to be backspace 
 							{
 							str[curr_char-1]=' ';
 							str[curr_char++]='\b';
@@ -911,6 +911,9 @@ int main()
 
 	init_rs232();
 	__enable_irq();
+
+	enable_rs232_interrupts();
+	enable_rs232();
 
 	tasks[task_count].stack = (void*)init_task(stacks[task_count], &first);
 	tasks[task_count].pid = 0;
